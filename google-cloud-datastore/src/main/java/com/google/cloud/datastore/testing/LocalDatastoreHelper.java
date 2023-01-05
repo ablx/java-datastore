@@ -52,12 +52,13 @@ public class LocalDatastoreHelper extends BaseEmulatorHelper<DatastoreOptions> {
   private final double consistency;
   private final Path gcdPath;
   private boolean storeOnDisk;
+  private boolean firestoreInDatastoreMode;
 
   // Gcloud emulator settings
   private static final String GCLOUD_CMD_TEXT = "gcloud beta emulators datastore start";
   private static final String GCLOUD_CMD_PORT_FLAG = "--host-port=";
   private static final String VERSION_PREFIX = "cloud-datastore-emulator ";
-  private static final String MIN_VERSION = "1.2.0";
+  private static final String MIN_VERSION = "1.4.0";
 
   // Downloadable emulator settings
   private static final String BIN_NAME = "cloud-datastore-emulator/cloud_datastore_emulator";
@@ -71,6 +72,10 @@ public class LocalDatastoreHelper extends BaseEmulatorHelper<DatastoreOptions> {
   // Common settings
   private static final String CONSISTENCY_FLAG = "--consistency=";
   private static final String PROJECT_FLAG = "--project=";
+
+  private static final String FIRESTORE_IN_DATASTORE_MODE_FLAG =
+      "--use-firestore-in-datastore-mode";
+
   private static final double DEFAULT_CONSISTENCY = 0.9;
   private static final String DEFAULT_PROJECT_ID = PROJECT_ID_PREFIX + UUID.randomUUID();
 
@@ -95,6 +100,8 @@ public class LocalDatastoreHelper extends BaseEmulatorHelper<DatastoreOptions> {
     private Path dataDir;
     private boolean storeOnDisk = true;
     private String projectId;
+
+    private boolean firestoreInDatastoreMode;
 
     private Builder() {}
 
@@ -129,6 +136,11 @@ public class LocalDatastoreHelper extends BaseEmulatorHelper<DatastoreOptions> {
       return this;
     }
 
+    public Builder setFirestoreInDatastoreMode(boolean firestoreInDatastoreMode) {
+      this.firestoreInDatastoreMode = firestoreInDatastoreMode;
+      return this;
+    }
+
     /** Creates a {@code LocalDatastoreHelper} object. */
     public LocalDatastoreHelper build() {
       return new LocalDatastoreHelper(this);
@@ -144,13 +156,19 @@ public class LocalDatastoreHelper extends BaseEmulatorHelper<DatastoreOptions> {
     this.consistency = builder.consistency > 0 ? builder.consistency : DEFAULT_CONSISTENCY;
     this.gcdPath = builder.dataDir;
     this.storeOnDisk = builder.storeOnDisk;
+    this.firestoreInDatastoreMode = builder.firestoreInDatastoreMode;
     String binName = BIN_NAME;
     if (isWindows()) {
       binName = BIN_NAME.replace("/", "\\");
     }
     List<String> gcloudCommand = new ArrayList<>(Arrays.asList(GCLOUD_CMD_TEXT.split(" ")));
     gcloudCommand.add(GCLOUD_CMD_PORT_FLAG + "localhost:" + getPort());
-    gcloudCommand.add(CONSISTENCY_FLAG + builder.consistency);
+
+    if (this.firestoreInDatastoreMode) {
+      gcloudCommand.add(FIRESTORE_IN_DATASTORE_MODE_FLAG);
+    } else {
+      gcloudCommand.add(CONSISTENCY_FLAG + builder.consistency);
+    }
     gcloudCommand.add(PROJECT_FLAG + projectId);
     if (!builder.storeOnDisk) {
       gcloudCommand.add("--no-store-on-disk");
@@ -160,7 +178,11 @@ public class LocalDatastoreHelper extends BaseEmulatorHelper<DatastoreOptions> {
     List<String> binCommand = new ArrayList<>(Arrays.asList(binName, "start"));
     binCommand.add("--testing");
     binCommand.add(BIN_CMD_PORT_FLAG + getPort());
-    binCommand.add(CONSISTENCY_FLAG + getConsistency());
+    if (this.firestoreInDatastoreMode) {
+      binCommand.add(FIRESTORE_IN_DATASTORE_MODE_FLAG);
+    } else {
+      binCommand.add(CONSISTENCY_FLAG + getConsistency());
+    }
     if (builder.dataDir != null) {
       gcloudCommand.add("--data-dir=" + getGcdPath());
     }
@@ -222,6 +244,13 @@ public class LocalDatastoreHelper extends BaseEmulatorHelper<DatastoreOptions> {
   /** Returns the data directory path of the local Datastore emulator. */
   public Path getGcdPath() {
     return gcdPath;
+  }
+
+  /**
+   * Returns {@code true} use firestore-in-datastore-mode, otherwise {@code false} use native mode.
+   */
+  public boolean isFirestoreInDatastoreMode() {
+    return firestoreInDatastoreMode;
   }
 
   /** Returns {@code true} data persist on disk, otherwise {@code false} data not store on disk. */
